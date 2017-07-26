@@ -16,7 +16,6 @@
 defmodule LoggerLogstashBackendTest do
   use ExUnit.Case, async: false
   require Logger
-  use Timex
 
   @backend {LoggerLogstashBackend, :test}
   Logger.add_backend @backend
@@ -41,7 +40,7 @@ defmodule LoggerLogstashBackendTest do
   test "can log" do
     Logger.info "hello world", [key1: "field1"]
     json = get_log()
-    {:ok, data} = JSX.decode json
+    {:ok, data} = Poison.decode json
     assert data["type"] === "some_app"
     assert data["message"] === "hello world"
     expected = %{
@@ -50,21 +49,22 @@ defmodule LoggerLogstashBackendTest do
       "module" => "Elixir.LoggerLogstashBackendTest",
       "pid" => (inspect self()),
       "some_metadata" => "go here",
-      "line" => 42,
+      "line" => 41,
       "key1" => "field1"
     }
-    assert contains?(data["fields"], expected)
-    {:ok, ts} = Timex.parse data["@timestamp"], "%FT%T%z", :strftime
-    ts = Timex.to_unix ts
 
-    now = Timex.to_unix Timex.local
+    assert contains?(data["fields"], expected)
+    {:ok, ts, _} = DateTime.from_iso8601(data["@timestamp"])
+    ts = DateTime.to_unix(ts)
+
+    now = DateTime.utc_now() |> DateTime.to_unix()
     assert (now - ts) < 1000
   end
 
   test "can log pids" do
     Logger.info "pid", [pid_key: self()]
     json = get_log()
-    {:ok, data} = JSX.decode json
+    {:ok, data} = Poison.decode json
     assert data["type"] === "some_app"
     assert data["message"] === "pid"
     expected = %{
@@ -77,10 +77,11 @@ defmodule LoggerLogstashBackendTest do
       "line" => 65
     }
     assert contains?(data["fields"], expected)
-    {:ok, ts} = Timex.parse data["@timestamp"], "%FT%T%z", :strftime
-    ts = Timex.to_unix ts
 
-    now = Timex.to_unix Timex.local
+    {:ok, ts, _} = DateTime.from_iso8601(data["@timestamp"])
+    ts = DateTime.to_unix(ts)
+
+    now = DateTime.utc_now() |> DateTime.to_unix()
     assert (now - ts) < 1000
   end
 
